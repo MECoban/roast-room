@@ -1,5 +1,31 @@
 # Roast Room
 
+## Türkçe
+
+Kararını yedi yapay zekâ danışmanından oluşan bir masaya tartıştır: Bezos, Paul Graham, Hormozi, Gary Vaynerchuk, Dan Martell, Gino Wickman ve Buffett. Her biri o kişinin kamuya açık konuşma ve yazılarından üretilmiş bir Claude ajanı; gerçek kişiler değil. Sonunda puanlı bir karar ve PDF rapor alırsın. Bu sürümde arayüz Türkçe.
+
+**Gerekenler:** [Claude Code](https://claude.com/claude-code) (Claude aboneliğin yeterli, API anahtarı gerekmez) ve [Node.js](https://nodejs.org) 20 veya üstü.
+
+**Kurulum için Claude Code'a şunu yaz:**
+
+```
+Şu GitHub projesini bilgisayarıma kur ve çalıştır: github.com/MECoban/roast-room. Kurulum bitince tarayıcıda masayı aç ve ilk kararımı nasıl soracağımı göster.
+```
+
+**Kullanım:** Proje klasöründe Claude Code'u aç ve yaz:
+
+```
+/roast-room --quick Kararın burada. Seçeneklerin: A ..., B ..., C ... Türkçe cevap ver.
+```
+
+Masayı tarayıcıda http://localhost:4730 adresinde canlı izlersin.
+
+**Maliyet uyarısı:** Hızlı mod (`--quick`) 4 danışman ve 2 tur çalıştırır; bizim denememiz yaklaşık 5,5 dakika sürdü ve ~1,8 milyon token işledi (çoğu önbellekten okuma). Tam masa 7 danışman, 3 tur, çok daha fazlası. Aboneliğinin limitinden düşer; küçük kararlar için `--quick` kullan.
+
+Orijinal proje: [nateherkai/roast-room](https://github.com/nateherkai/roast-room) (MIT lisansı). Bu fork Türkçe arayüz ekler.
+
+---
+
 ![The Roast Room](docs/room.jpg)
 
 Bring a hard business decision and seven AI advisors argue it out, then hand you a scored verdict and a one-click PDF. The seats are Jeff Bezos, Paul Graham, Alex Hormozi, Gary Vaynerchuk, Dan Martell, Gino Wickman, and Warren Buffett, each built from that person's public work: their letters, essays, talks, and videos. The council runs in Claude Code, and a small local web app shows them around a table talking it through.
