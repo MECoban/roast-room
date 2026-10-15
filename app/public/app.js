@@ -1,62 +1,95 @@
-import { downloadVerdictPdf } from "./pdf.js";
+import { downloadVerdictPdf, labelTr, voteTr, DISCLAIMER_TR } from "./pdf.js";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 const SAMPLES = [
-  ["Raise my prices?", "I run a coaching business doing $30k a month with 15 active clients at $2,000 each. I want to raise the price to $3,500. Options: raise for everyone now, raise for new clients only, or keep $2,000. Close rate is about 50% on sales calls. I'm leaning toward raising for everyone because I'm underpaid."],
-  ["First salesperson?", "I'm a solo founder of a B2B SaaS at $25k MRR growing 5% a month. I do every sales call myself (about 20 hours a week) and I'm burning out. Should I hire a full-time account executive at $120k base, hire a part-time commission-only closer, or keep selling myself for six more months? I have $150k in the bank."],
-  ["Second product?", "My agency makes $80k a month building AI automations for dentists. A few clients asked for an AI receptionist product. Should I build the receptionist as a separate SaaS, offer it as an add-on to existing clients only, or stay focused on the agency? Team of 6, about $200k cash."],
-  ["Quit my job?", "I make $180k a year at a tech company. My side business (a paid newsletter) makes $6k a month and grew 8% a month this year. I have 9 months of expenses saved. Should I quit now, quit in 6 months, or keep both and hire a writer?"],
+  ["Fiyatları artırayım mı?", "Aylık 30 bin $ ciro yapan bir koçluk işi yürütüyorum. 15 aktif müşterim var, her biri 2.000 $ ödüyor. Fiyatı 3.500 $'a çıkarmak istiyorum. Seçenekler: herkese hemen zam yapmak, sadece yeni müşterilere zam yapmak ya da 2.000 $'da kalmak. Satış görüşmelerinde kapanış oranım yaklaşık %50. Düşük fiyat aldığımı düşündüğüm için herkese zam yapmaya eğilimliyim."],
+  ["İlk satışçı?", "B2B SaaS işinin tek kurucusuyum, aylık tekrarlayan gelirim 25 bin $ ve her ay %5 büyüyor. Bütün satış görüşmelerini kendim yapıyorum (haftada yaklaşık 20 saat) ve tükeniyorum. Yıllık 120 bin $ maaşlı tam zamanlı bir satış temsilcisi mi almalıyım, sadece komisyonla çalışan yarı zamanlı bir kapanışçı mı, yoksa altı ay daha satışı kendim mi yapmalıyım? Bankada 150 bin $ var."],
+  ["İkinci ürün?", "Ajansım diş hekimleri için yapay zekâ otomasyonları kuruyor ve ayda 80 bin $ kazanıyor. Birkaç müşteri yapay zekâ resepsiyonist ürünü istedi. Resepsiyonisti ayrı bir SaaS olarak mı kurmalıyım, sadece mevcut müşterilere ek hizmet olarak mı sunmalıyım, yoksa ajansa odaklı mı kalmalıyım? Ekip 6 kişi, kasada yaklaşık 200 bin $ var."],
+  ["İşten ayrılayım mı?", "Bir teknoloji şirketinde yıllık 180 bin $ kazanıyorum. Yan işim olan ücretli bültenim ayda 6 bin $ kazandırıyor ve bu yıl her ay %8 büyüdü. 9 aylık giderim birikmiş durumda. Şimdi mi ayrılmalıyım, 6 ay sonra mı, yoksa ikisini birden sürdürüp bir yazar mı almalıyım?"],
 ];
 
-const EXAMPLE = "I run a coaching business at $30k a month with 15 clients at $2,000 each. Should I raise to $3,500 for everyone, raise for new clients only, or keep $2,000? Close rate is about 50% and I have $40k in the bank. Success is $45k a month by March. I'm leaning toward raising for everyone because I'm underpaid.";
+const EXAMPLE = "Aylık 30 bin $ ciro yapan bir koçluk işi yürütüyorum, 15 müşterim var ve her biri 2.000 $ ödüyor. Herkese 3.500 $'a zam mı yapayım, sadece yeni müşterilere mi, yoksa 2.000 $'da mı kalayım? Kapanış oranım yaklaşık %50 ve bankada 40 bin $ var. Başarı, mart ayına kadar aylık 45 bin $. Düşük fiyat aldığımı düşündüğüm için herkese zam yapmaya eğilimliyim.";
 
-// The how-to, shown in the side panel while the room is empty and in "How it works".
+// ---- Turkish display maps. Model output and data keys stay English; only what is drawn on screen changes.
+const SEAT_TR = {
+  bezos: ["Strateji ve kararlar", "Doğru bahis mi, ne kadar geri döndürülebilir?"],
+  graham: ["Ürün ve girişimler", "İnsanlar bunu gerçekten istiyor mu, büyüyor mu?"],
+  hormozi: ["Teklif, fiyatlama ve satış", "İnsanlar öder mi, ne kadar öder, nasıl kapatırız?"],
+  garyvee: ["Pazarlama ve dikkat", "Dikkat nereden gelir, hâlâ ucuz mu?"],
+  martell: ["İnsanlar, işe alım ve kurucu zamanı", "Bunu kim yapacak, kurucunun takvimine maliyeti ne?"],
+  wickman: ["Operasyon ve ölçekleme", "İş, kurucu her şeyi tek başına tutmadan bunu yürütebilir mi?"],
+  buffett: ["Para ve sermaye", "Nakde, riske ve uzun vadeli değere ne yapar?"],
+};
+const STANCE_TR = { "strong yes": "Kesin evet", "yes": "Evet", "conditional yes": "Evet, şartla", "no": "Hayır", "strong no": "Kesin hayır" };
+const MODE_TR = { full: "tam", quick: "hızlı" };
+const STATUS_TR = { done: "bitti", running: "sürüyor", error: "hata", stopped: "durdu" };
+const lower = (t) => String(t).toLocaleLowerCase("tr");
+const upperFirst = (t) => t.replace(/^./u, (c) => c.toLocaleUpperCase("tr"));
+// Phase labels come from the server in English (or from older saved sessions). Map them for display.
+function phaseTr(label = "") {
+  const fixed = {
+    "The Chair is reading your question": "Başkan sorunu okuyor",
+    "The Chair is finding the fault lines": "Başkan ayrılık noktalarını buluyor",
+    "The Chair is weighing the debate": "Başkan tartışmayı tartıyor",
+    "The Chair is drafting a resolution": "Başkan bir karar taslağı hazırlıyor",
+    "The Chair is writing the verdict": "Başkan kararı yazıyor",
+    "Quick mode: the vote round is skipped": "Hızlı mod: oylama turu atlandı",
+    "Round 1: opening positions": "1. tur: açılış görüşleri",
+    "Round 2: the debate": "2. tur: tartışma",
+    "Round 3: the vote": "3. tur: oylama",
+  };
+  if (fixed[label]) return fixed[label];
+  const m = label.match(/^Quick mode: spread (.+) and no ruin risk, so the vote round is skipped$/);
+  return m ? `Hızlı mod: fark ${m[1]} ve yıkım riski yok, oylama turu atlandı` : label;
+}
+
+// The how-to, shown in the side panel while the room is empty and in "Nasıl çalışır".
 const GUIDE = `
   <div class="guide">
     <div class="guide-sec">
-      <h4>How to use the Roast Room</h4>
+      <h4>Roast Room nasıl kullanılır</h4>
       <ol>
-        <li><span>Open Claude Code in this folder.</span></li>
-        <li><span>Type <code>/roast-room</code> and your decision.</span></li>
-        <li><span>Answer the Chair's questions. Then watch the council argue it out here.</span></li>
-        <li><span>When the verdict lands, download it as a PDF.</span></li>
+        <li><span>Claude Code'u bu klasörde aç.</span></li>
+        <li><span><code>/roast-room</code> yaz ve kararını ekle.</span></li>
+        <li><span>Başkan'ın sorularını cevapla. Sonra masanın burada tartışmasını izle.</span></li>
+        <li><span>Karar çıkınca PDF olarak indir.</span></li>
       </ol>
     </div>
     <div class="guide-sec">
-      <h4>What to put in your question</h4>
+      <h4>Sorunda neler olmalı</h4>
       <ul>
-        <li><span><b>The decision</b> in one line.</span></li>
-        <li><span><b>Your options.</b> Two or three. "Keep doing what I do now" counts.</span></li>
-        <li><span><b>Your numbers.</b> Revenue, cash, and team size.</span></li>
-        <li><span><b>Your limits.</b> Deadline, hours, and budget.</span></li>
-        <li><span><b>What success looks like</b>, and by when.</span></li>
-        <li><span><b>Which way you're leaning</b>, and why. The council tests it.</span></li>
+        <li><span><b>Karar</b> tek satırda.</span></li>
+        <li><span><b>Seçeneklerin.</b> İki ya da üç tane. "Şimdiki gibi devam et" de sayılır.</span></li>
+        <li><span><b>Rakamların.</b> Ciro, nakit ve ekip büyüklüğü.</span></li>
+        <li><span><b>Sınırların.</b> Son tarih, saat ve bütçe.</span></li>
+        <li><span><b>Başarının neye benzediği</b> ve ne zamana kadar.</span></li>
+        <li><span><b>Hangi yöne eğilimli olduğun</b> ve nedeni. Masa bunu test eder.</span></li>
       </ul>
-      <p class="note" style="margin-top:8px">Left something out? The Chair asks before the council starts.</p>
+      <p class="note" style="margin-top:8px">Bir şeyi atladın mı? Başkan, masa başlamadan önce sorar.</p>
     </div>
     <div class="guide-sec">
-      <h4>Example</h4>
+      <h4>Örnek</h4>
       <div class="example">
         <p><code>/roast-room</code> ${EXAMPLE.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>
-        <button class="ghost" type="button" data-copy-example>Copy this example</button>
+        <button class="ghost" type="button" data-copy-example>Bu örneği kopyala</button>
       </div>
     </div>
     <div class="guide-sec">
-      <h4>Good to know</h4>
+      <h4>Bilmen gerekenler</h4>
       <ul>
-        <li><span><b>Full council:</b> 7 advisors, 3 rounds. For big calls that are hard to undo.</span></li>
-        <li><span><b>Quick:</b> add <code>--quick</code> for 4 advisors and 2 rounds. Uses far less of your plan.</span></li>
-        <li><span><b>Every council is saved.</b> Open Past sessions to replay one or download its PDF.</span></li>
+        <li><span><b>Tam masa:</b> 7 danışman, 3 tur. Geri dönüşü zor, büyük kararlar için.</span></li>
+        <li><span><b>Hızlı:</b> 4 danışman ve 2 tur için <code>--quick</code> ekle. Planından çok daha az harcar.</span></li>
+        <li><span><b>Her masa kaydedilir.</b> Bir masayı yeniden izlemek ya da PDF'ini indirmek için Geçmiş oturumlar'ı aç.</span></li>
       </ul>
     </div>
   </div>`;
 
 const SHAPES = ["base", "open", "mid", "blink"];
 const portrait = (key, shape = "base") => `/portraits/${key}-${shape}.webp`;
-const ROUND_NAME = ["", "Opening", "Debate", "Vote"];
+const ROUND_NAME = ["", "Açılış", "Tartışma", "Oylama"];
 
 const state = {
   seats: [], byKey: {}, session: null, options: [], weights: {}, active: [], round: 0,
@@ -66,10 +99,10 @@ const state = {
 // ------------------------------------------------------------- boot
 async function boot() {
   const r = await fetch("/api/seats").then((x) => x.json());
-  state.seats = r.seats;
-  state.byKey = Object.fromEntries(r.seats.map((s) => [s.key, s]));
+  state.seats = r.seats.map((x) => (SEAT_TR[x.key] ? { ...x, pillar: SEAT_TR[x.key][0], question: SEAT_TR[x.key][1] } : x));
+  state.byKey = Object.fromEntries(state.seats.map((s) => [s.key, s]));
   state.runner = r.runner;
-  if (r.runner === "api" && !r.hasKey) toast("No ANTHROPIC_API_KEY found in .env. Add it and restart the server.");
+  if (r.runner === "api" && !r.hasKey) toast(".env içinde ANTHROPIC_API_KEY bulunamadı. Ekleyip sunucuyu yeniden başlat.");
   renderSeats();
   renderSamples();
   bindUI();
@@ -118,7 +151,7 @@ function renderSamples() {
 
 function renderSeats() {
   $("#seats").innerHTML = state.seats.map((s, i) => `
-    <div class="seat" id="seat-${s.key}" data-seat="${s.key}" style="--d:-${(i * 1.7) % 6}s" tabindex="0" role="button" aria-label="${esc(s.name)}, ${esc(s.pillar)}. Open card.">
+    <div class="seat" id="seat-${s.key}" data-seat="${s.key}" style="--d:-${(i * 1.7) % 6}s" tabindex="0" role="button" aria-label="${esc(s.name)}, ${esc(s.pillar)}. Kartı aç.">
       <div class="think" aria-hidden="true"><i></i><i></i><i></i></div>
       <div class="bust" data-shape="base">${SHAPES.map((sh) => `<img class="${sh}" src="${portrait(s.key, sh)}" alt="" draggable="false">`).join("")}</div>
     </div>`).join("");
@@ -126,7 +159,7 @@ function renderSeats() {
     <div class="nameplate" id="plate-${s.key}" data-seat="${s.key}">
       <b>${esc(s.short === "Gary V" ? "Gary V" : s.name)}</b>
       <small>${esc(s.pillar)}</small>
-      <div class="meta"><span class="pips" title="Weight on this decision"></span><span class="chip" hidden></span><span class="score" hidden></span></div>
+      <div class="meta"><span class="pips" title="Bu karardaki ağırlık"></span><span class="chip" hidden></span><span class="score" hidden></span></div>
     </div>`).join("");
   layoutStage();
 }
@@ -182,13 +215,13 @@ function bindUI() {
   $("#composer").addEventListener("submit", async (e) => {
     e.preventDefault();
     const prompt = $("#prompt").value.trim();
-    if (prompt.length < 10) return toast("Give the council a real decision, at least a sentence.");
+    if (prompt.length < 10) return toast("Masaya gerçek bir karar ver, en az bir cümle.");
     const mode = $('input[name="mode"]:checked').value;
     $("#convene").disabled = true;
     const r = await fetch("/api/council", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt, mode }) });
     const j = await r.json();
     $("#convene").disabled = false;
-    if (!r.ok) return toast(j.error || "Could not start the council.");
+    if (!r.ok) return toast(j.error || "Masa başlatılamadı.");
     attach(j.id);
   });
   const openFrom = (e) => { const b = e.target.closest("[data-seat]"); if (b) openCard(b.dataset.seat); };
@@ -201,8 +234,8 @@ function bindUI() {
   $("#guideBtn").addEventListener("click", openGuide);
   document.addEventListener("click", async (e) => {
     if (e.target.closest("[data-copy-example]")) {
-      try { await navigator.clipboard.writeText("/roast-room " + EXAMPLE); toast("Copied. Paste it into Claude Code."); }
-      catch { toast("Copy didn't work here. Select the text and copy it."); }
+      try { await navigator.clipboard.writeText("/roast-room " + EXAMPLE); toast("Kopyalandı. Claude Code'a yapıştır."); }
+      catch { toast("Kopyalama burada çalışmadı. Metni seçip kopyala."); }
     }
     if (e.target.closest("[data-pdf]")) savePdf(e.target.closest("[data-pdf]"));
   });
@@ -245,7 +278,7 @@ const player = {
   reset() { this.epoch++; this.q.length = 0; this.fast = true; this.flushTimers(); this.busy = false; this.fast = false; this.info(); },
   info() {
     const waiting = this.q.filter((e) => e.type === "seat_done").length;
-    $("#queueInfo").textContent = waiting ? `${waiting} lines up next` : "";
+    $("#queueInfo").textContent = waiting ? `sırada ${waiting} satır var` : "";
   },
 };
 
@@ -265,7 +298,7 @@ function reset() {
   $("#playbar").hidden = true;
   $("#newBtn").hidden = true;
   $("#verdictSheet").hidden = true;
-  $("#panelHead").textContent = "Getting started";
+  $("#panelHead").textContent = "Başlarken";
   $("#feed").innerHTML = GUIDE;
   $$(".vote").forEach((b) => b.remove());
   $$(".seat").forEach((el) => { el.classList.remove("absent", "speaking", "thinking", "addressed"); $(".bust", el).dataset.shape = "base"; });
@@ -282,10 +315,10 @@ function begin(id) {
   $("#waiting").hidden = true;
   $("#newBtn").hidden = false;
   $("#playbar").hidden = false;
-  $("#panelHead").textContent = "Key points";
-  $("#feed").innerHTML = '<div class="empty">One line per seat as the council talks. Click a seat to read its full card.</div>';
+  $("#panelHead").textContent = "Öne çıkanlar";
+  $("#feed").innerHTML = '<div class="empty">Masa konuştukça her koltuktan bir satır. Tam kartı okumak için bir koltuğa tıkla.</div>';
   $("#stage").classList.add("live");
-  chairSays("The council is taking their seats", { dots: true });
+  chairSays("Masa yerlerini alıyor", { dots: true });
 }
 
 function attach(id) {
@@ -297,7 +330,7 @@ function attach(id) {
     if (ev.type === "end") { es.close(); refreshUsage(); return; }
     if (ev.type === "delta") return; // seats speak from their finished cards
     if (ev.type === "usage") return refreshUsage();
-    if (ev.type === "seat_error") return toast(`${state.byKey[ev.seat].short} hit an error: ${ev.error}`);
+    if (ev.type === "seat_error") return toast(`${state.byKey[ev.seat].short} hata verdi: ${ev.error}`);
     player.push(ev);
   };
   es.onerror = () => { /* the browser retries; the server replays from the start */ };
@@ -321,10 +354,11 @@ async function handle(ev) {
     case "phase": {
       state.wait = { phase: ev.phase, at: ev.at || Date.now() };
       setStep(STEP_OF[ev.phase] || "setup");
-      feedPhase(ev.label);
+      const phase = phaseTr(ev.label);
+      feedPhase(phase);
       const thinking = ["setup", "cruxes", "draft", "verdict"].includes(ev.phase);
       if (thinking || ev.phase === "skip3") {
-        chairSays(ev.label.replace(/^The Chair is /, "").replace(/^./, (c) => c.toUpperCase()), { dots: thinking });
+        chairSays(upperFirst(phase.replace(/^(?:The Chair is |Başkan )/, "")), { dots: thinking });
         await player.sleep(1400);
       }
       break;
@@ -337,7 +371,7 @@ async function handle(ev) {
     case "cruxes": await onCruxes(ev); break;
     case "draft": await onDraft(ev.draft); break;
     case "verdict": state.wait = null; onVerdict(ev); break;
-    case "error": state.wait = null; toast(`The council stopped: ${ev.error}`); chairSays(`The council stopped: ${ev.error}`); break;
+    case "error": state.wait = null; toast(`Masa durdu: ${ev.error}`); chairSays(`Masa durdu: ${ev.error}`); break;
   }
 }
 
@@ -356,9 +390,9 @@ function onSetup(ev) {
     const pl = $(`#plate-${s.key}`);
     pl.classList.toggle("absent", absent);
     const w = ev.weights[s.key]?.weight || 1;
-    pl.title = `Weight ${w} of 3: ${ev.weights[s.key]?.reason || ""}`;
+    pl.title = `Ağırlık ${w}/3: ${ev.weights[s.key]?.reason || ""}`;
   }
-  chairSays(ev.title, { tag: ev.mode === "quick" ? "Quick council" : "Full council" });
+  chairSays(ev.title, { tag: ev.mode === "quick" ? "Hızlı masa" : "Tam masa" });
 }
 
 function updateOptions(scores) {
@@ -377,7 +411,7 @@ function onRoundStart(round) {
   state.links = [];
   drawLinks();
   $("#cruxes").hidden = true;
-  chairSays(`${["", "Round 1: opening positions", "Round 2: the debate", "Round 3: the vote"][round]}`, { dots: true, tag: "The floor is open" });
+  chairSays(`${["", "1. tur: açılış görüşleri", "2. tur: tartışma", "3. tur: oylama"][round]}`, { dots: true, tag: "Söz açık" });
 }
 
 // ------------------------------------------------------------- talking
@@ -437,7 +471,7 @@ function captionFor(who) {
   const s = state.byKey[who];
   $("#capAv").className = `cap-av${s ? "" : " chair"}`;
   $("#capAv").innerHTML = `<img src="${s ? portrait(who) : "/brand/ais-symbol.png"}" alt="">`;
-  $("#capWho").textContent = s ? s.name : "The Chair";
+  $("#capWho").textContent = s ? s.name : "Başkan";
 }
 
 function chairSays(text, { dots = false, tag = "" } = {}) {
@@ -498,24 +532,24 @@ async function onSeatDone(ev) {
   const line = lineFor(round, parsed);
   let tag = ROUND_NAME[round], sub = "", target = null;
   if (round === 1) {
-    tag = `${stanceWord(parsed.stance)}${top ? ` · backs ${top.id} (${top.v}/10)` : ""}`;
+    tag = `${stanceWord(parsed.stance)}${top ? ` · ${top.id} seçeneğini destekliyor (${top.v}/10)` : ""}`;
   } else if (round === 2) {
     const tgt = parsed.disagreeWith ? state.byKey[parsed.disagreeWith] : null;
     if (tgt) {
       target = tgt.key;
-      tag = `Pushes back on ${tgt.short}`;
+      tag = `Karşı çıkıyor: ${tgt.short}`;
       state.links = state.links.filter((l) => l.from !== seat);
       state.links.push({ from: seat, to: tgt.key });
       drawLinks();
     }
-    sub = /^yes/i.test(parsed.moved) ? "Changed position" : "";
+    sub = /^yes/i.test(parsed.moved) ? "Fikir değiştirdi" : "";
   } else {
     const v = parsed.vote || "endorse";
-    tag = `Votes ${v}`;
+    tag = `Oy: ${lower(voteTr(v))}`;
 
   }
   feedCard(round, seat, parsed);
-  await speak(seat, line || "I'll put it in my card.", { tag, target, sub });
+  await speak(seat, line || "Bunu kartıma yazdım.", { tag, target, sub });
 
   const pl = $(`#plate-${seat}`);
   const chip = $(".chip", pl);
@@ -523,24 +557,23 @@ async function onSeatDone(ev) {
   chip.className = "chip";
   if (round === 3) {
     const v = parsed.vote || "endorse";
-    chip.textContent = v;
+    chip.textContent = lower(voteTr(v));
     chip.classList.add(v);
     $(`#seat-${seat} .vote`)?.remove();
     const stamp = document.createElement("div");
     stamp.className = `vote ${v}`;
-    stamp.textContent = v.toUpperCase();
+    stamp.textContent = voteTr(v).toLocaleUpperCase("tr");
     $(`#seat-${seat}`).appendChild(stamp);
   } else chip.textContent = stanceWord(parsed.stance);
-  if (top) { const sc = $(".score", pl); sc.hidden = false; sc.textContent = `${top.id} ${top.v}`; sc.title = `Highest score: option ${top.id}`; }
+  if (top) { const sc = $(".score", pl); sc.hidden = false; sc.textContent = `${top.id} ${top.v}`; sc.title = `En yüksek puan: ${top.id} seçeneği`; }
   setSpeaker(null);
   void s;
 }
 
 function stanceWord(t = "") {
   const m = t.match(/strong yes|conditional yes|strong no|yes|no/i);
-  if (!m) return "Spoke";
-  const w = m[0].toLowerCase();
-  return w === "conditional yes" ? "Yes, if" : w[0].toUpperCase() + w.slice(1);
+  if (!m) return "Konuştu";
+  return STANCE_TR[m[0].toLowerCase()] || m[0];
 }
 
 function topOption(scores = {}) {
@@ -555,20 +588,20 @@ async function onCruxes(ev) {
   $("#caption").hidden = true;
   const c = $("#cruxes");
   c.hidden = false;
-  c.innerHTML = `<div class="head">${ev.unanimous ? "Too much agreement. The Chair pushes back." : "What they're fighting about"}</div>` +
+  c.innerHTML = `<div class="head">${ev.unanimous ? "Fazla uzlaşma var. Başkan itiraz ediyor." : "Ayrıldıkları noktalar"}</div>` +
     ev.cruxes.map((x, i) => `<div class="crux" style="animation-delay:${i * 0.18}s"><b>${esc(x.question)}</b><div class="sides">${x.sides.map((sd) => `<span class="side"><span class="faces">${sd.seats.filter((k) => state.byKey[k]).map(face).join("")}</span>${esc(shorten(sd.position, 48))}</span>`).join("")}</div></div>`).join("");
   const f = document.createElement("div");
   f.className = "feed-note";
-  f.innerHTML = `<b>The fight:</b> ${ev.cruxes.map((x) => esc(x.question)).join(" ")}`;
+  f.innerHTML = `<b>Ayrılık noktaları:</b> ${ev.cruxes.map((x) => esc(x.question)).join(" ")}`;
   feedAppend(f);
   await player.sleep(3500 + 1800 * ev.cruxes.length);
 }
 
 async function onDraft(d) {
-  chairSays(`Proposal: ${d.label} on option ${d.option}. ${firstSentences(clean(d.recommendation), 140)}`, { tag: "Up for a vote" });
+  chairSays(`Öneri: ${labelTr(d.label)}, seçenek ${d.option}. ${firstSentences(clean(d.recommendation), 140)}`, { tag: "Oylamaya sunuldu" });
   const f = document.createElement("div");
   f.className = "feed-note";
-  f.innerHTML = `<b>Up for a vote:</b> ${esc(d.label)} on option ${esc(d.option)}.`;
+  f.innerHTML = `<b>Oylamaya sunuldu:</b> ${esc(labelTr(d.label))}, seçenek ${esc(d.option)}.`;
   feedAppend(f);
   await player.sleep(4200);
 }
@@ -601,7 +634,7 @@ function feedAppend(node) {
 function feedPhase(label) {
   const d = document.createElement("div");
   d.className = "feed-phase";
-  d.textContent = label.replace(/^The Chair is /, "Chair: ");
+  d.textContent = label.replace(/^(?:The Chair is |Başkan )/, "Başkan: ");
   feedAppend(d);
 }
 function feedCard(round, seat, parsed) {
@@ -612,7 +645,7 @@ function feedCard(round, seat, parsed) {
   d.dataset.round = round;
   const top = topOption(parsed.optionScores);
   const tgt = parsed.disagreeWith ? state.byKey[parsed.disagreeWith]?.short : "";
-  const what = round === 1 ? `${stanceWord(parsed.stance)}${top ? `, backs ${top.id}` : ""}` : round === 2 ? (tgt ? `vs ${tgt}` : "Debate") : `Votes ${parsed.vote || "endorse"}`;
+  const what = round === 1 ? `${stanceWord(parsed.stance)}${top ? `, ${top.id} seçeneğini destekliyor` : ""}` : round === 2 ? (tgt ? `karşı: ${tgt}` : "Tartışma") : `Oy: ${lower(voteTr(parsed.vote || "endorse"))}`;
   d.innerHTML = `<img class="av" src="${portrait(seat)}" alt=""><div><div class="h">${esc(s.short)}<span class="r">${esc(what)}</span></div><p>${esc(lineFor(round, parsed, 105))}</p></div>`;
   feedAppend(d);
 }
@@ -623,10 +656,10 @@ function openCard(seat, round) {
   const r = round || rounds[0];
   const c = state.cards[r]?.[seat];
   $("#cardBody").innerHTML = `
-    <div class="card-head"><img src="${portrait(seat)}" alt=""><div><div class="label">${esc(s.pillar)}</div><h3>${esc(s.name)}</h3><p class="muted" style="margin:0">Owns the question: ${esc(s.question)}</p></div></div>
+    <div class="card-head"><img src="${portrait(seat)}" alt=""><div><div class="label">${esc(s.pillar)}</div><h3>${esc(s.name)}</h3><p class="muted" style="margin:0">Sorusu: ${esc(s.question)}</p></div></div>
     ${rounds.length > 1 ? `<p style="margin:0 0 6px">${rounds.slice().reverse().map((x) => `<button class="ghost" data-r="${x}" style="margin-right:6px">${ROUND_NAME[x]}</button>`).join("")}</p>` : ""}
-    ${c ? `<pre>${esc(c.text)}</pre>${c.quotes.length ? `<ul class="qcheck">${c.quotes.map((q) => `<li class="${q.verified ? "" : "bad"}">"${esc(shorten(q.quote, 110))}" (${q.source}) ${q.verified ? "verified in the brain" : "not found in the brain"}</li>`).join("")}</ul>` : ""}` : `<p class="muted">This seat has not spoken yet.</p>`}
-    <p class="muted" style="font-size:12px">A simulated advisor built from ${esc(s.name)}'s public work. Not the person.</p>`;
+    ${c ? `<pre>${esc(c.text)}</pre>${c.quotes.length ? `<ul class="qcheck">${c.quotes.map((q) => `<li class="${q.verified ? "" : "bad"}">"${esc(shorten(q.quote, 110))}" (${q.source}) ${q.verified ? "kaynak dosyasında doğrulandı" : "kaynak dosyasında bulunamadı"}</li>`).join("")}</ul>` : ""}` : `<p class="muted">Bu koltuk henüz konuşmadı.</p>`}
+    <p class="muted" style="font-size:12px">${esc(s.name)} adlı kişinin kamuya açık içeriklerinden üretilmiş simülasyon danışman. Gerçek kişi değildir.</p>`;
   $$("#cardBody [data-r]").forEach((b) => b.addEventListener("click", () => openCard(seat, Number(b.dataset.r))));
   const dlg = $("#cardDialog");
   if (!dlg.open) dlg.showModal();
@@ -656,45 +689,45 @@ function onVerdict(ev) {
   const short = (t, n) => esc(shorten(clean(t || ""), n));
   const html = `
     <div class="v-top">
-      <div><div class="label">The council's verdict</div><span class="v-label ${labelClass(v.label)}">${esc(v.label)}</span></div>
-      <div class="actions"><button class="pill" type="button" data-pdf>Download PDF</button><button class="ghost" data-close>Back to the table</button></div>
+      <div><div class="label">Masanın kararı</div><span class="v-label ${labelClass(v.label)}">${esc(labelTr(v.label))}</span></div>
+      <div class="actions"><button class="pill" type="button" data-pdf>PDF indir</button><button class="ghost" data-close>Masaya dön</button></div>
     </div>
     <p class="v-call">${esc(v.call)}</p>
     <div class="v-grid">
-      <div class="v-sec"><h3>Scores</h3><div class="v-opts">${state.options.map((o) => `
+      <div class="v-sec"><h3>Puanlar</h3><div class="v-opts">${state.options.map((o) => `
         <div class="opt ${o.id === v.recommended ? "lead" : ""}"><span class="id">${o.id}</span><span class="label">${esc(o.label)}</span><span class="val">${v.scores[o.id]?.score ?? "-"}</span><span class="bar"><i style="width:${(v.scores[o.id]?.score || 0) * 10}%"></i></span></div>`).join("")}</div>
-        <p class="v-meta">Confidence ${v.confidence ?? "-"}/10${v.votes ? ` · ${v.votes.endorse || 0} endorse, ${v.votes.amend || 0} amend, ${v.votes.dissent || 0} dissent` : ""}</p>
+        <p class="v-meta">Güven ${v.confidence ?? "-"}/10${v.votes ? ` · ${v.votes.endorse || 0} onay, ${v.votes.amend || 0} revize, ${v.votes.dissent || 0} ret` : ""}</p>
       </div>
-      <div class="v-sec"><h3>Why</h3><ul class="v-why">${v.why.slice(0, 3).map((w) => { const k = seatKey(w.seat); return `<li>${k ? `<img class="av" src="${portrait(k)}" alt="">` : ""}<span>${short(w.point, 150)}</span></li>`; }).join("")}</ul></div>
-      <div class="v-sec"><h3>Watch out</h3><div class="minority"><div class="who">${mk ? `<img class="av" src="${portrait(mk)}" alt="">` : ""}${esc(seatName(v.minority.seat))}</div><q>${short(v.minority.quote, 170)}</q></div></div>
-      <div class="v-sec"><h3>Next steps</h3><ul class="v-steps">${v.next_steps.slice(0, 3).map((n) => `<li><b>${esc(n.when)}</b> ${short(n.action, 120)}</li>`).join("")}</ul>
-        <p class="v-meta"><b>Kill it if:</b> ${short(v.kill_criteria, 140)}</p></div>
+      <div class="v-sec"><h3>Neden</h3><ul class="v-why">${v.why.slice(0, 3).map((w) => { const k = seatKey(w.seat); return `<li>${k ? `<img class="av" src="${portrait(k)}" alt="">` : ""}<span>${short(w.point, 150)}</span></li>`; }).join("")}</ul></div>
+      <div class="v-sec"><h3>Dikkat</h3><div class="minority"><div class="who">${mk ? `<img class="av" src="${portrait(mk)}" alt="">` : ""}${esc(seatName(v.minority.seat))}</div><q>${short(v.minority.quote, 170)}</q></div></div>
+      <div class="v-sec"><h3>Sonraki adımlar</h3><ul class="v-steps">${v.next_steps.slice(0, 3).map((n) => `<li><b>${esc(n.when)}</b> ${short(n.action, 120)}</li>`).join("")}</ul>
+        <p class="v-meta"><b>Şu olursa bırak:</b> ${short(v.kill_criteria, 140)}</p></div>
     </div>
-    <details class="v-more"><summary>Full detail</summary>
+    <details class="v-more"><summary>Tüm ayrıntı</summary>
       <div class="v-grid">
-        <div class="v-sec"><h3>Where they fought</h3><ul>${v.fights.map((f) => `<li><b>${esc(f.crux)}</b> ${esc(f.story)}</li>`).join("")}</ul></div>
-        <div class="v-sec"><h3>Conditions</h3><ol>${v.conditions.map((c) => `<li>${esc(c)}</li>`).join("")}</ol></div>
-        <div class="v-sec v-wide"><h3>Scorecard</h3>
-          <table class="scorecard"><thead><tr><th>Seat</th><th>Weight</th>${state.options.map((o) => `<th>${o.id}</th>`).join("")}<th>Their line</th></tr></thead><tbody>
+        <div class="v-sec"><h3>Nerede ayrıldılar</h3><ul>${v.fights.map((f) => `<li><b>${esc(f.crux)}</b> ${esc(f.story)}</li>`).join("")}</ul></div>
+        <div class="v-sec"><h3>Şartlar</h3><ol>${v.conditions.map((c) => `<li>${esc(c)}</li>`).join("")}</ol></div>
+        <div class="v-sec v-wide"><h3>Puan kartı</h3>
+          <table class="scorecard"><thead><tr><th>Koltuk</th><th>Ağırlık</th>${state.options.map((o) => `<th>${o.id}</th>`).join("")}<th>Söyledikleri</th></tr></thead><tbody>
           ${seats.map((x) => { const s = state.byKey[x.key]; return `<tr><td><span class="who"><img class="av" src="${portrait(x.key)}" alt="">${esc(s.short)}</span></td><td class="n">${x.weight}</td>${state.options.map((o) => `<td class="n">${x.optionScores?.[o.id] ?? "-"}</td>`).join("")}<td class="line">${short(x.oneLine, 150)}</td></tr>`; }).join("")}
           </tbody></table>
-          <p class="muted" style="font-size:11.5px;margin-top:8px">Weighted by how much each pillar matters here. ${state.options.map((o) => `${o.id}: ${esc(v.scores[o.id]?.math || "")}`).join(" · ")}</p></div>
-        <div class="v-sec"><h3>Cheapest test</h3><p>${esc(v.cheapest_test)}</p><h3>Revisit</h3><p>${esc(v.revisit)}</p></div>
-        <div class="v-sec"><h3>The strongest objection in full</h3><p>${esc(v.minority.quote)}</p><p class="muted">For this to be right: ${esc(v.minority.would_have_to_be_true)}</p></div>
-        ${v.amendments?.length ? `<div class="v-sec v-wide"><h3>Amendments</h3><ul>${v.amendments.map((a) => `<li><b>${esc(seatName(a.seat))}:</b> ${esc(a.amendment)} <span class="tag">${a.adopted ? "Adopted" : "Not adopted"}: ${esc(a.reason)}</span></li>`).join("")}</ul></div>` : ""}
+          <p class="muted" style="font-size:11.5px;margin-top:8px">Her alanın bu kararda ne kadar önemli olduğuna göre ağırlıklandı. ${state.options.map((o) => `${o.id}: ${esc(v.scores[o.id]?.math || "")}`).join(" · ")}</p></div>
+        <div class="v-sec"><h3>En ucuz test</h3><p>${esc(v.cheapest_test)}</p><h3>Yeniden bak</h3><p>${esc(v.revisit)}</p></div>
+        <div class="v-sec"><h3>En güçlü itiraz, tam metin</h3><p>${esc(v.minority.quote)}</p><p class="muted">Bunun doğru olması için: ${esc(v.minority.would_have_to_be_true)}</p></div>
+        ${v.amendments?.length ? `<div class="v-sec v-wide"><h3>Değişiklik önergeleri</h3><ul>${v.amendments.map((a) => `<li><b>${esc(seatName(a.seat))}:</b> ${esc(a.amendment)} <span class="tag">${a.adopted ? "Kabul edildi" : "Kabul edilmedi"}: ${esc(a.reason)}</span></li>`).join("")}</ul></div>` : ""}
       </div>
     </details>
-    <div class="v-foot"><span class="muted">${esc(v.disclaimer)}</span><button class="ghost" data-close>Back to the table</button></div>`;
+    <div class="v-foot"><span class="muted">${esc(DISCLAIMER_TR)}</span><button class="ghost" data-close>Masaya dön</button></div>`;
   $("#verdictBody").innerHTML = html;
   const plate = $("#plate");
   plate.hidden = false;
-  plate.innerHTML = `<div class="label">The council's verdict</div><span class="v-label ${labelClass(v.label)}">${esc(v.label)}</span><p>${esc(firstSentences(clean(v.call), 150))}</p><div class="row"><button type="button" id="plateOpen">Read the verdict</button><button type="button" data-pdf>Download PDF</button><button type="button" class="alt" id="plateReplay">Replay this council</button></div>`;
+  plate.innerHTML = `<div class="label">Masanın kararı</div><span class="v-label ${labelClass(v.label)}">${esc(labelTr(v.label))}</span><p>${esc(firstSentences(clean(v.call), 150))}</p><div class="row"><button type="button" id="plateOpen">Kararı oku</button><button type="button" data-pdf>PDF indir</button><button type="button" class="alt" id="plateReplay">Bu masayı yeniden oynat</button></div>`;
   $("#plateOpen").addEventListener("click", () => ($("#verdictSheet").hidden = false));
   $("#plateReplay").addEventListener("click", () => replay(state.session));
   $("#playbar").hidden = true;
   const f = document.createElement("div");
   f.className = "feed-note";
-  f.innerHTML = `<b>Verdict: ${esc(v.label)}.</b> ${esc(firstSentences(clean(v.call), 160))}`;
+  f.innerHTML = `<b>Karar: ${esc(labelTr(v.label))}.</b> ${esc(firstSentences(clean(v.call), 160))}`;
   feedAppend(f);
   setTimeout(() => { if (state.verdict === ev) $("#verdictSheet").hidden = false; }, 1600);
 }
@@ -703,8 +736,8 @@ function onVerdict(ev) {
 async function openHistory() {
   const { sessions } = await fetch("/api/sessions").then((x) => x.json());
   $("#historyList").innerHTML = sessions.length
-    ? sessions.map((s) => `<li><button data-id="${esc(s.id)}"><b>${esc(s.title)}</b><small>${esc(s.id.slice(0, 10))} · ${esc(s.mode)} · ${esc(s.status)}</small></button>${s.status === "done" ? `<button class="pdf" type="button" data-pdf="${esc(s.id)}" title="Download the verdict as a PDF">PDF</button>` : ""}</li>`).join("")
-    : '<li class="muted">No sessions yet. Convene the council once and it shows up here.</li>';
+    ? sessions.map((s) => `<li><button data-id="${esc(s.id)}"><b>${esc(s.title)}</b><small>${esc(s.id.slice(0, 10))} · ${esc(MODE_TR[s.mode] || s.mode)} · ${esc(STATUS_TR[s.status] || s.status)}</small></button>${s.status === "done" ? `<button class="pdf" type="button" data-pdf="${esc(s.id)}" title="Kararı PDF olarak indir">PDF</button>` : ""}</li>`).join("")
+    : '<li class="muted">Henüz oturum yok. Masayı bir kez topla, burada görünür.</li>';
   $$("#historyList button[data-id]").forEach((b) => b.addEventListener("click", () => { $("#historyDialog").close(); replay(b.dataset.id); }));
   $("#historyDialog").showModal();
 }
@@ -722,19 +755,19 @@ async function replay(id) {
 // ------------------------------------------------------------- waiting on Claude Code
 // A live council goes quiet for minutes while the seats write in parallel. Instead of a
 // frozen table, say what is happening, how long it has been, and what each seat is weighing.
-const SAME_TIME = "The advisors all write at the same time in Claude Code. Their lines play here as soon as the round is in.";
+const SAME_TIME = "Danışmanlar Claude Code'da aynı anda yazıyor. Tur tamamlanınca satırları burada oynar.";
 function waitCopy(phase) {
   const n = state.setup?.mode === "quick" ? 2 : 3;
   return {
-    setup: ["Setting the table", "The Chair is seating the council.", ""],
-    round1: ["Round 1 of " + n, "The advisors are writing their opening positions.", SAME_TIME],
-    round2: ["Round 2 of " + n, "The advisors are reading each other's openings and firing back.", SAME_TIME],
-    round3: ["Round 3 of " + n, "The advisors are voting on the Chair's proposal.", SAME_TIME],
-    cruxes: ["Between rounds", "The Chair is reading the openings and finding where they disagree.", "The fight shows up here next, then the debate starts."],
-    draft: ["Between rounds", "The Chair is turning the debate into a proposal for the vote.", "Next, every advisor votes on it."],
-    skip3: ["Last step", "The Chair is scoring the room and writing the verdict.", "When it lands, you can download it as a PDF."],
-    verdict: ["Last step", "The Chair is scoring the room and writing the verdict.", "When it lands, you can download it as a PDF."],
-  }[phase] || ["Working", "The council is working.", ""];
+    setup: ["Masa kuruluyor", "Başkan danışmanları yerlerine oturtuyor.", ""],
+    round1: ["Tur 1 / " + n, "Danışmanlar açılış görüşlerini yazıyor.", SAME_TIME],
+    round2: ["Tur 2 / " + n, "Danışmanlar birbirinin açılışını okuyor ve karşılık veriyor.", SAME_TIME],
+    round3: ["Tur 3 / " + n, "Danışmanlar Başkan'ın önerisine oy veriyor.", SAME_TIME],
+    cruxes: ["Turlar arası", "Başkan açılışları okuyor ve nerede ayrıldıklarını buluyor.", "Ayrılık noktaları burada görünür, sonra tartışma başlar."],
+    draft: ["Turlar arası", "Başkan tartışmayı oylama için bir öneriye çeviriyor.", "Sonra her danışman bunu oylar."],
+    skip3: ["Son adım", "Başkan masayı puanlıyor ve kararı yazıyor.", "Karar çıkınca PDF olarak indirebilirsin."],
+    verdict: ["Son adım", "Başkan masayı puanlıyor ve kararı yazıyor.", "Karar çıkınca PDF olarak indirebilirsin."],
+  }[phase] || ["Çalışıyor", "Masa çalışıyor.", ""];
 }
 const clock = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
 
@@ -785,7 +818,7 @@ function tickWait() {
       const s = state.byKey[pending[state.museIdx]];
       muse.classList.add("fade");
       setTimeout(() => {
-        muse.innerHTML = "<b>" + esc(s.short) + "</b> is weighing: " + esc(s.question.replace(/^./, (c) => c.toLowerCase())) + (done ? " · " + done + " of " + seats.length + " in" : "");
+        muse.innerHTML = "<b>" + esc(s.short) + "</b> tartıyor: " + esc(s.question) + (done ? " · " + done + " / " + seats.length + " tamam" : "");
         muse.classList.remove("fade");
         $$(".seat").forEach((el) => el.classList.toggle("musing", el.dataset.seat === s.key));
       }, 300);
@@ -809,7 +842,7 @@ async function savePdf(btn) {
   const id = btn.dataset.pdf;
   btn.disabled = true;
   const old = btn.textContent;
-  btn.textContent = "Making PDF...";
+  btn.textContent = "PDF hazırlanıyor...";
   try {
     let setup = state.setup, verdict = state.verdict;
     if (id) { // a past session from the history list
@@ -817,11 +850,11 @@ async function savePdf(btn) {
       setup = j.events.find((e) => e.type === "setup");
       verdict = [...j.events].reverse().find((e) => e.type === "verdict");
     }
-    if (!setup || !verdict) throw new Error("This council has no verdict yet.");
+    if (!setup || !verdict) throw new Error("Bu masanın henüz kararı yok.");
     await downloadVerdictPdf({ setup, verdict, byKey: state.byKey, id: id || state.session });
   } catch (e) {
     console.error(e);
-    toast("Couldn't make the PDF: " + (e.message || e));
+    toast("PDF oluşturulamadı: " + (e.message || e));
   } finally {
     btn.disabled = false;
     btn.textContent = old;
@@ -841,7 +874,7 @@ async function refreshUsage() {
   const u = await fetch("/api/usage").then((x) => x.json()).catch(() => null);
   if (!u || !u.calls) { $("#usage").textContent = ""; return; }
   const k = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : `${Math.round(n / 1000)}k`);
-  $("#usage").textContent = `${u.calls} calls · ${k(u.input + u.cacheRead + u.cacheWrite)} in · ${k(u.output)} out`;
+  $("#usage").textContent = `${u.calls} çağrı · ${k(u.input + u.cacheRead + u.cacheWrite)} giriş · ${k(u.output)} çıkış`;
 }
 
 boot();

@@ -36,10 +36,10 @@ const server = http.createServer(async (req, res) => {
     if (p === "/api/seats") return send(res, 200, { seats: SEATS, models: MODELS, runner: RUNNER, hasKey: Boolean(env("ANTHROPIC_API_KEY")) });
     if (p === "/api/usage") return send(res, 200, usage);
     if (p === "/api/council" && req.method === "POST") {
-      if (RUNNER !== "api") return send(res, 403, { error: "This room is a viewer. Run /roast-room in Claude Code, or set COUNCIL_RUNNER=api in .env." });
-      if (running && getSession(running)?.status === "running") return send(res, 409, { error: "A council is already in session. Wait for its verdict." });
+      if (RUNNER !== "api") return send(res, 403, { error: "Bu oda yalnızca izleyici. Claude Code'da /roast-room çalıştır ya da .env içinde COUNCIL_RUNNER=api ayarla." });
+      if (running && getSession(running)?.status === "running") return send(res, 409, { error: "Zaten bir masa toplantıda. Kararını bekle." });
       const { prompt, mode } = await readJson(req);
-      if (!prompt || prompt.trim().length < 10) return send(res, 400, { error: "Give the council a real decision (at least a sentence)." });
+      if (!prompt || prompt.trim().length < 10) return send(res, 400, { error: "Masaya gerçek bir karar ver (en az bir cümle)." });
       const s = startCouncil(prompt.trim().slice(0, 4000), mode === "quick" ? "quick" : "full");
       running = s.id;
       return send(res, 200, { id: s.id });
